@@ -1,0 +1,59 @@
+name: IEco Ledger Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  log-to-ledger:
+    runs-on: ubuntu-latest
+
+    steps:
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ieco-495312
+          workload_identity_provider: projects/63357359996/locations/global/workloadIdentityPools/ieco-agent-pool/providers/ieco-github-provider
+          service_account: ieco-agent-sa@ieco-495312.iam.gserviceaccount.com
+
+      - name: Install dependencies
+        run: pip install google-cloud-bigtable
+
+      - name: Write one row to behavior_ledger
+        run: |
+          python3 << 'EOF'
+          from google.cloud import bigtable
+          from datetime import datetime
+          import time
+
+          project_id = "ieco-495312"
+          instance_id = "ieco-provenance-log"
+          table_id = "behavior_ledger"
+
+          client = bigtable.Client(project=project_id)
+          instance = client.instance(instance_id)
+          table = instance.table(table_id)
+
+          agent_id = "ccom"
+          workflow_id = "ieco-ledger-test"
+          reverse_ts = str(9999999999999 - int(time.time() * 1000))
+          row_key = f"{agent_id}#{workflow_id}#{reverse_ts}".encode()
+
+          row = table.direct_row(row_key)
+          row.set_cell("id", "agent_id", agent_id)
+          row.set_cell("id", "workflow_id", workflow_id)
+          row.set_cell("id", "class", "3")
+          row.set_cell("cog", "system_mode", "system_2")
+          row.set_cell("cog", "latency_ms", "0")
+          row.set_cell("cog", "decision", "first_ledger_write")
+          row.set_cell("prov", "mission", "ieco-foundation-test")
+          row.set_cell("prov", "timestamp", datetime.utcnow().isoformat())
+          row.set_cell("prov", "repo", "donaldhigh-cloud/bot-watching")
+          row.commit()
+
+          print(f"Row written: {row_key.decode()}")
+          print("IEco Reputation Ledger: first entry confirmed.")
+          EOF
